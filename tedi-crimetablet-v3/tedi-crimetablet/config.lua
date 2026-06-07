@@ -9,6 +9,7 @@ Config.TabletKey = 'F5' -- Key to open tablet (when item is in inventory)
 Config.Boosting = {
     Enabled = true,
     CooldownMinutes = 10, -- Cooldown between contracts
+    StealRadius = 100, -- Red circle radius for steal zone
     PoliceRequired = 2, -- Minimum police online to start boost (for A & S only)
     HackDifficulty = { -- Hack minigame difficulty per class
         ['D'] = { length = 4, timer = 15 },
@@ -64,6 +65,9 @@ Config.Boosting = {
         vector4(489.23, -1314.56, 29.27, 182.45),
         vector4(-583.12, -1634.78, 19.81, 95.67),
         vector4(1533.45, 6332.12, 24.11, 312.89),
+        vector4(150.23, -450.67, 45.32, 178.34),
+        vector4(2100.45, 3500.12, 40.67, 92.11),
+        vector4(-1200.56, 2345.78, 65.23, 265.45),
     },
 }
 

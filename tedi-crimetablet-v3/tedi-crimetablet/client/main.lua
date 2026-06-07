@@ -5,9 +5,8 @@ local isTabletOpen = false
 local hasTablet = false
 local activeBoost = nil
 local activeHeist = nil
-local activeHouseRobbery = nil
 local boostBlip = nil
-local dropOffBlip = nil
+local dropOffBlips = {}
 local contractActive = false
 local currentGroup = {}
 
@@ -103,7 +102,10 @@ RegisterNUICallback('stopBoostContract', function(data, cb)
         end
         activeBoost = nil
         if boostBlip then RemoveBlip(boostBlip) end
-        if dropOffBlip then RemoveBlip(dropOffBlip) end
+        for _, blip in ipairs(dropOffBlips) do
+            if DoesBlipExist(blip) then RemoveBlip(blip) end
+        end
+        dropOffBlips = {}
         SendNUIMessage({ action = 'contractStopped' })
         ShowNotification('~r~Contract cancelled.')
         cb({ success = true })
@@ -134,12 +136,14 @@ AddEventHandler('crimetablet:boostContractStarted', function(contractData)
     SetVehicleNumberPlateText(vehicle, licensePlate)
     SendNUIMessage({
         action = 'boostStarted',
-        licensePlate = licensePlate
+        licensePlate = licensePlate,
+        vehicleName = contractData.vehicleLabel
     })
     
     activeBoost.vehicle = vehicle
     activeBoost.stage = 'steal'
     activeBoost.licensePlate = licensePlate
+    activeBoost.stealCoords = spawnCoords
     
     -- Set GPS to vehicle
     boostBlip = AddBlipForCoord(spawnCoords.x, spawnCoords.y, spawnCoords.z)
@@ -164,6 +168,10 @@ function MonitorBoostContract()
         Wait(500)
         
         if activeBoost.stage == 'steal' then
+            -- Draw red circle around steal zone
+            local stealCoords = activeBoost.stealCoords
+            DrawMarker(1, stealCoords.x, stealCoords.y, stealCoords.z - 1.0, 0, 0, 0, 0, 0, 0, Config.Boosting.StealRadius, Config.Boosting.StealRadius, 30.0, 255, 0, 0, 50, false, true, 2, false, nil, nil, false)
+            
             -- Check if player is in the target vehicle
             local playerPed = PlayerPedId()
             if IsPedInVehicle(playerPed, activeBoost.vehicle, false) then
@@ -194,7 +202,7 @@ function MonitorBoostContract()
             
             if dist < 10.0 then
                 -- Draw marker at drop-off
-                DrawMarker(1, dropOff.x, dropOff.y, dropOff.z - 1.0, 0, 0, 0, 0, 0, 0, 5.0, 5.0, 1.0, 230, 57, 70, 100, false, true, 2, false, nil, nil, false)
+                DrawMarker(1, dropOff.x, dropOff.y, dropOff.z - 1.0, 0, 0, 0, 0, 0, 0, 5.0, 5.0, 1.0, 0, 255, 0, 100, false, true, 2, false, nil, nil, false)
             end
             
             if dist < 3.0 and IsPedInVehicle(PlayerPedId(), activeBoost.vehicle, false) then
@@ -216,7 +224,7 @@ function MonitorCarDamage()
             if activeBoost and activeBoost.vehicle then
                 local currentDamage = GetVehicleDeformationFixed(activeBoost.vehicle)
                 if currentDamage > lastDamage then
-                    local damagePoints = math.floor((currentDamage - lastDamage) * Config.Boosting.CarScratchingPoints)
+                    local damagePoints = math.floor((currentDamage - lastDamage) * 10)
                     TriggerServerEvent('crimetablet:addScratchingPoints', damagePoints)
                     ShowNotification('~y~+' .. damagePoints .. ' Scratching Points')
                     lastDamage = currentDamage
@@ -265,15 +273,28 @@ RegisterNUICallback('hackResult', function(data, cb)
         -- Remove vehicle lock
         SetVehicleDoorLockStatus(activeBoost.vehicle, 1)
         
-        -- Set GPS to drop-off
-        dropOffBlip = AddBlipForCoord(dropOff.x, dropOff.y, dropOff.z)
-        SetBlipSprite(dropOffBlip, 358)
-        SetBlipColour(dropOffBlip, 2) -- Green
-        SetBlipRoute(dropOffBlip, true)
-        SetBlipRouteColour(dropOffBlip, 2)
-        BeginTextCommandSetBlipName('STRING')
-        AddTextComponentString('Drop-Off Point')
-        EndTextCommandSetBlipName(dropOffBlip)
+        -- Create blips for all delivery points
+        for i, loc in ipairs(dropOffs) do
+            local blip = AddBlipForCoord(loc.x, loc.y, loc.z)
+            SetBlipSprite(blip, 358)
+            
+            -- Highlight current drop-off
+            if i == 1 or (dropOff.x == loc.x and dropOff.y == loc.y) then
+                SetBlipColour(blip, 2) -- Green for active drop-off
+                SetBlipRoute(blip, true)
+                SetBlipRouteColour(blip, 2)
+                BeginTextCommandSetBlipName('STRING')
+                AddTextComponentString('Drop-Off Point (ACTIVE)')
+                EndTextCommandSetBlipName(blip)
+            else
+                SetBlipColour(blip, 5) -- Yellow for other drop-offs
+                BeginTextCommandSetBlipName('STRING')
+                AddTextComponentString('Drop-Off Point')
+                EndTextCommandSetBlipName(blip)
+            end
+            
+            table.insert(dropOffBlips, blip)
+        end
         
         SendNUIMessage({
             action = 'contractUpdate',
@@ -281,7 +302,7 @@ RegisterNUICallback('hackResult', function(data, cb)
             progress = 70
         })
         
-        ShowNotification('~g~Tracker disabled! Deliver the vehicle to the drop-off.')
+        ShowNotification('~g~Tracker disabled! Deliver the vehicle to any drop-off point.')
         CloseTablet()
     else
         -- Hack failed - alert police
@@ -304,7 +325,10 @@ function CompleteBoostContract()
     contractActive = false
     
     -- Remove blips
-    if dropOffBlip then RemoveBlip(dropOffBlip) end
+    for _, blip in ipairs(dropOffBlips) do
+        if DoesBlipExist(blip) then RemoveBlip(blip) end
+    end
+    dropOffBlips = {}
     
     -- Delete vehicle
     local vehicle = activeBoost.vehicle
@@ -325,40 +349,6 @@ function CompleteBoostContract()
     
     activeBoost = nil
 end
-
--- ===== HOUSE ROBBERY SYSTEM =====
-RegisterNUICallback('startHouseRobbery', function(data, cb)
-    if activeHouseRobbery then
-        cb({ success = false, message = 'Already in a robbery!' })
-        return
-    end
-    
-    ESX.TriggerServerCallback('crimetablet:canStartHouseRobbery', function(canStart, message)
-        if canStart then
-            TriggerServerEvent('crimetablet:startHouseRobbery')
-            cb({ success = true })
-        else
-            cb({ success = false, message = message })
-        end
-    end)
-end)
-
-RegisterNetEvent('crimetablet:houseRobberyStarted')
-AddEventHandler('crimetablet:houseRobberyStarted', function(robberyData)
-    activeHouseRobbery = robberyData
-    ShowNotification('~y~House robbery started! Check nearby houses.')
-end)
-
--- ===== LOCKPICKING SYSTEM =====
-RegisterNUICallback('lockpickCar', function(data, cb)
-    TriggerServerEvent('crimetablet:attemptCarLockpick', data.vehicleId)
-    cb({ success = true })
-end)
-
-RegisterNUICallback('lockpickHouse', function(data, cb)
-    TriggerServerEvent('crimetablet:attemptHouseLockpick', data.houseId)
-    cb({ success = true })
-end)
 
 -- ===== HEIST SYSTEM =====
 RegisterNUICallback('inviteCrew', function(data, cb)
@@ -513,7 +503,9 @@ AddEventHandler('onResourceStop', function(resourceName)
     end
     
     if boostBlip then RemoveBlip(boostBlip) end
-    if dropOffBlip then RemoveBlip(dropOffBlip) end
+    for _, blip in ipairs(dropOffBlips) do
+        if DoesBlipExist(blip) then RemoveBlip(blip) end
+    end
     
     if activeBoost and activeBoost.vehicle then
         DeleteEntity(activeBoost.vehicle)
