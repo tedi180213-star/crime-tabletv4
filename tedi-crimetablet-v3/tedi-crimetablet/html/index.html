@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crime Tablet</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div id="tablet-container" class="hidden">
+        <div class="tablet-frame">
+            <div class="tablet-screen">
+                <!-- Status Bar -->
+                <div class="status-bar">
+                    <div class="status-left">
+                        <span class="time" id="current-time">12:00</span>
+                    </div>
+                    <div class="status-right">
+                        <i class="fas fa-wifi"></i>
+                        <i class="fas fa-signal"></i>
+                        <span class="battery"><i class="fas fa-battery-full"></i></span>
+                    </div>
+                </div>
+
+                <!-- Home Screen -->
+                <div id="home-screen" class="screen active">
+                    <div class="home-header">
+                        <h1>Today</h1>
+                        <div class="profile-icon">
+                            <i class="fas fa-user-secret"></i>
+                        </div>
+                    </div>
+                    <div class="apps-grid">
+                        <div class="app-card boosting-card" onclick="openApp('boosting')">
+                            <div class="app-card-bg">
+                                <i class="fas fa-car-side app-bg-icon"></i>
+                            </div>
+                            <div class="app-card-content">
+                                <div class="app-icon boosting-icon">
+                                    <i class="fas fa-bolt"></i>
+                                </div>
+                                <div class="app-info">
+                                    <h3>Boosting</h3>
+                                    <p>Vehicle contracts</p>
+                                </div>
+                            </div>
+                            <div class="app-card-footer">
+                                <span class="app-stat" id="boost-level">Level 0</span>
+                                <span class="app-badge">ACTIVE</span>
+                            </div>
+                        </div>
+
+                        <div class="app-card heist-card" onclick="openApp('heist')">
+                            <div class="app-card-bg">
+                                <i class="fas fa-vault app-bg-icon"></i>
+                            </div>
+                            <div class="app-card-content">
+                                <div class="app-icon heist-icon">
+                                    <i class="fas fa-mask"></i>
+                                </div>
+                                <div class="app-info">
+                                    <h3>Heists</h3>
+                                    <p>Plan & execute</p>
+                                </div>
+                            </div>
+                            <div class="app-card-footer">
+                                <span class="app-stat" id="heist-stat">4 Available</span>
+                                <span class="app-badge">HOT</span>
+                            </div>
+                        </div>
+
+                        <div class="app-card market-card" onclick="openApp('blackmarket')">
+                            <div class="app-card-bg">
+                                <i class="fas fa-skull-crossbones app-bg-icon"></i>
+                            </div>
+                            <div class="app-card-content">
+                                <div class="app-icon market-icon">
+                                    <i class="fas fa-store"></i>
+                                </div>
+                                <div class="app-info">
+                                    <h3>Black Market</h3>
+                                    <p>Buy & sell</p>
+                                </div>
+                            </div>
+                            <div class="app-card-footer">
+                                <span class="app-stat" id="market-stock">In Stock</span>
+                                <span class="app-badge new">NEW</span>
+                            </div>
+                        </div>
+
+                        <div class="app-card wallet-card" onclick="openApp('wallet')">
+                            <div class="app-card-bg">
+                                <i class="fas fa-coins app-bg-icon"></i>
+                            </div>
+                            <div class="app-card-content">
+                                <div class="app-icon wallet-icon">
+                                    <i class="fas fa-wallet"></i>
+                                </div>
+                                <div class="app-info">
+                                    <h3>Wallet</h3>
+                                    <p>Crypto & cash</p>
+                                </div>
+                            </div>
+                            <div class="app-card-footer">
+                                <span class="app-stat" id="wallet-balance">$0</span>
+                                <span class="app-badge crypto">CRYPTO</span>
+                            </div>
+                        </div>
+                        <div class="app-card chat-card" onclick="openApp('darkchat')">
+                            <div class="app-card-bg">
+                                <i class="fas fa-comment-dots app-bg-icon"></i>
+                            </div>
+                            <div class="app-card-content">
+                                <div class="app-icon chat-icon">
+                                    <i class="fas fa-comments"></i>
+                                </div>
+                                <div class="app-info">
+                                    <h3>Dark Chat</h3>
+                                    <p>Anonymous msgs</p>
+                                </div>
+                            </div>
+                            <div class="app-card-footer">
+                                <span class="app-stat" id="chat-unread">0 New</span>
+                                <span class="app-badge">ENCRYPTED</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Quick Stats -->
+                    <div class="quick-stats">
+                        <div class="stat-item">
+                            <i class="fas fa-chart-line"></i>
+                            <span>Rep: <strong id="player-rep">0</strong></span>
+                        </div>
+                        <div class="stat-item">
+                            <i class="fas fa-tasks"></i>
+                            <span>Jobs: <strong id="jobs-done">0</strong></span>
+                        </div>
+                        <div class="stat-item">
+                            <i class="fas fa-clock"></i>
+                            <span id="cooldown-timer">Ready</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Boosting App Screen -->
+                <div id="boosting-screen" class="screen">
+                    <div class="app-header">
+                        <button class="back-btn" onclick="goHome()">
+                            <i class="fas fa-arrow-left"></i>
+                        </button>
+                        <h2><i class="fas fa-bolt"></i> Boosting</h2>
+                        <div class="header-badge">
+                            <span id="boost-level-display">LVL 0</span>
+                        </div>
+                    </div>
+
+                    <div class="boosting-content">
+                        <!-- Class Selection -->
+                        <div class="class-tabs" id="class-tabs">
+                            <!-- Generated by JS -->
+                        </div>
+
+                        <!-- Active Contract -->
+                        <div id="active-contract" class="contract-panel hidden">
+                            <div class="contract-header">
+                                <h3><i class="fas fa-file-contract"></i> Active Contract</h3>
+                                <span class="contract-timer" id="contract-timer">--:--</span>
+                            </div>
+                            <div class="contract-details">
+                                <div class="contract-vehicle">
+                                    <i class="fas fa-car"></i>
+                                    <span id="contract-vehicle-name">--</span>
+                                </div>
+                                <div class="contract-class">
+                                    <span id="contract-class-label">--</span>
+                                </div>
+                                <div class="contract-reward">
+                                    <i class="fas fa-dollar-sign"></i>
+                                    <span id="contract-reward-amount">$0</span>
+                                </div>
+                            </div>
+                            <div class="contract-progress">
+                                <div class="progress-steps">
+                                    <div class="step" id="step-steal"><i class="fas fa-key"></i> Steal</div>
+                                    <div class="step" id="step-hack"><i class="fas fa-laptop-code"></i> Hack</div>
+                                    <div class="step" id="step-deliver"><i class="fas fa-flag-checkered"></i> Deliver</div>
+                                </div>
+                                <div class="progress-bar">
+                                    <div class="progress-fill" id="contract-progress-fill"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Available Contracts -->
+                        <div id="contracts-list" class="contracts-list">
+                            <h3>Available Contracts</h3>
+                            <div id="contracts-container">
+                                <!-- Generated by JS -->
+                            </div>
+                        </div>
+
+                        <!-- Boost Stats -->
+                        <div class="boost-stats">
+                            <div class="boost-stat-item">
+                                <span class="stat-label">XP</span>
+                                <div class="xp-bar">
+                                    <div class="xp-fill" id="xp-fill"></div>
+                                </div>
+                                <span class="stat-value" id="xp-value">0/100</span>
+                            </div>
+                            <div class="boost-stat-item">
+                                <span class="stat-label">Completed</span>
+                                <span class="stat-value" id="boosts-completed">0</span>
+                            </div>
+                            <div class="boost-stat-item">
+                                <span class="stat-label">Earnings</span>
+                                <span class="stat-value" id="total-earnings">$0</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Heist App Screen -->
+                <div id="heist-screen" class="screen">
+                    <div class="app-header">
+                        <button class="back-btn" onclick="goHome()">
+                            <i class="fas fa-arrow-left"></i>
+                        </button>
+                        <h2><i class="fas fa-mask"></i> Heists</h2>
+                        <div class="header-badge">
+                            <span id="heist-level-display">LVL 0</span>
+                        </div>
+                    </div>
+
+                    <div class="heist-content">
+                        <!-- Heist List -->
+                        <div id="heist-list" class="heist-list">
+                            <!-- Generated by JS -->
+                        </div>
+
+                        <!-- Heist Detail View -->
+                        <div id="heist-detail" class="heist-detail hidden">
+                            <div class="heist-detail-header">
+                                <div class="heist-image" id="heist-detail-image">
+                                    <i class="fas fa-building-columns"></i>
+                                </div>
+                                <div class="heist-meta">
+                                    <h3 id="heist-detail-name">--</h3>
+                                    <p id="heist-detail-desc">--</p>
+                                    <div class="heist-tags">
+                                        <span class="tag difficulty" id="heist-detail-difficulty">--</span>
+                                        <span class="tag payout" id="heist-detail-payout">$0</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Crew Panel -->
+                            <div class="crew-panel">
+                                <h4><i class="fas fa-users"></i> Crew</h4>
+                                <div class="crew-slots" id="crew-slots">
+                                    <!-- Generated by JS -->
+                                </div>
+                                <button class="btn btn-invite" id="btn-invite-crew" onclick="inviteCrew()">
+                                    <i class="fas fa-user-plus"></i> Invite Nearby
+                                </button>
+                            </div>
+
+                            <!-- Stages -->
+                            <div class="stages-panel">
+                                <h4><i class="fas fa-list-check"></i> Stages</h4>
+                                <div class="stages-list" id="heist-stages">
+                                    <!-- Generated by JS -->
+                                </div>
+                            </div>
+
+                            <button class="btn btn-start-heist" id="btn-start-heist" onclick="startHeist()">
+                                <i class="fas fa-play"></i> Start Heist
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Black Market Screen -->
+                <div id="blackmarket-screen" class="screen">
+                    <div class="app-header">
+                        <button class="back-btn" onclick="goHome()">
+                            <i class="fas fa-arrow-left"></i>
+                        </button>
+                        <h2><i class="fas fa-store"></i> Black Market</h2>
+                        <button class="btn-sell" onclick="openListItemModal()">
+                            <i class="fas fa-plus"></i> List Item
+                        </button>
+                    </div>
+
+                    <div class="market-content">
+                        <!-- Market Tabs -->
+                        <div class="market-tabs">
+                            <div class="market-tab active" data-tab="listings" onclick="switchMarketTab('listings')">
+                                <i class="fas fa-shopping-bag"></i> Listings
+                            </div>
+                            <div class="market-tab" data-tab="my-listings" onclick="switchMarketTab('my-listings')">
+                                <i class="fas fa-tag"></i> My Listings
+                            </div>
+                        </div>
+
+                        <!-- Listings Grid -->
+                        <div class="market-listings" id="market-listings">
+                            <!-- Generated by JS -->
+                        </div>
+
+                        <!-- Balance -->
+                        <div class="purchase-panel" id="purchase-panel">
+                            <div class="cart-summary">
+                                <span>Balance: <strong id="player-balance">$0</strong></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- List Item Modal -->
+                    <div id="list-item-modal" class="modal hidden">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h3><i class="fas fa-plus-circle"></i> List Item for Sale</h3>
+                                <button class="modal-close" onclick="closeListItemModal()">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                            <div class="modal-body">
+                                <div class="form-group">
+                                    <label>Item Name</label>
+                                    <input type="text" id="list-item-name" placeholder="e.g. Lockpick, Radio...">
+                                </div>
+                                <div class="form-group">
+                                    <label>Price ($)</label>
+                                    <input type="number" id="list-item-price" placeholder="5000">
+                                </div>
+                                <div class="form-group">
+                                    <label>Quantity</label>
+                                    <input type="number" id="list-item-qty" placeholder="1" value="1">
+                                </div>
+                                <div class="form-group">
+                                    <label>Description (optional)</label>
+                                    <input type="text" id="list-item-desc" placeholder="Quick sale...">
+                                </div>
+                                <button class="btn btn-list-confirm" onclick="confirmListItem()">
+                                    <i class="fas fa-check"></i> List for Sale
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Dark Chat Screen -->
+                <div id="darkchat-screen" class="screen">
+                    <div class="app-header">
+                        <button class="back-btn" onclick="goHome()">
+                            <i class="fas fa-arrow-left"></i>
+                        </button>
+                        <h2><i class="fas fa-comments"></i> Dark Chat</h2>
+                        <div class="header-badge">
+                            <i class="fas fa-lock"></i> E2E
+                        </div>
+                    </div>
+
+                    <div class="chat-content">
+                        <!-- Channel List -->
+                        <div class="chat-sidebar" id="chat-sidebar">
+                            <div class="chat-channel active" data-channel="global" onclick="switchChannel('global')">
+                                <div class="channel-icon"><i class="fas fa-globe"></i></div>
+                                <div class="channel-info">
+                                    <h4>Global</h4>
+                                    <p class="last-msg">Anonymous criminal chat</p>
+                                </div>
+                            </div>
+                            <div class="chat-channel" data-channel="deals" onclick="switchChannel('deals')">
+                                <div class="channel-icon"><i class="fas fa-handshake"></i></div>
+                                <div class="channel-info">
+                                    <h4>Deals</h4>
+                                    <p class="last-msg">Buy/sell/trade</p>
+                                </div>
+                            </div>
+                            <div class="chat-channel" data-channel="crew" onclick="switchChannel('crew')">
+                                <div class="channel-icon"><i class="fas fa-users"></i></div>
+                                <div class="channel-info">
+                                    <h4>Crew</h4>
+                                    <p class="last-msg">Find partners</p>
+                                </div>
+                            </div>
+                            <div class="chat-channel" data-channel="intel" onclick="switchChannel('intel')">
+                                <div class="channel-icon"><i class="fas fa-eye"></i></div>
+                                <div class="channel-info">
+                                    <h4>Intel</h4>
+                                    <p class="last-msg">Police scanner & tips</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Chat Messages Area -->
+                        <div class="chat-main">
+                            <div class="chat-messages" id="chat-messages">
+                                <!-- Generated by JS -->
+                            </div>
+                            <div class="chat-input-area">
+                                <input type="text" id="chat-input" placeholder="Type anonymously..." onkeydown="if(event.key==='Enter')sendChatMessage()">
+                                <button class="btn-send" onclick="sendChatMessage()">
+                                    <i class="fas fa-paper-plane"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Wallet Screen -->
+                <div id="wallet-screen" class="screen">
+                    <div class="app-header">
+                        <button class="back-btn" onclick="goHome()">
+                            <i class="fas fa-arrow-left"></i>
+                        </button>
+                        <h2><i class="fas fa-wallet"></i> Wallet</h2>
+                    </div>
+
+                    <div class="wallet-content">
+                        <div class="wallet-balance-card">
+                            <div class="balance-main">
+                                <span class="balance-label">Total Balance</span>
+                                <span class="balance-amount" id="wallet-total">$0</span>
+                            </div>
+                            <div class="balance-split">
+                                <div class="balance-item">
+                                    <i class="fas fa-dollar-sign"></i>
+                                    <span>Cash</span>
+                                    <strong id="wallet-cash">$0</strong>
+                                </div>
+                                <div class="balance-item crypto-balance">
+                                    <i class="fab fa-bitcoin"></i>
+                                    <span>Crypto</span>
+                                    <strong id="wallet-crypto">0 BTC</strong>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="wallet-history">
+                            <h3>Recent Transactions</h3>
+                            <div class="transactions-list" id="transactions-list">
+                                <!-- Generated by JS -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Hack Minigame Overlay -->
+                <div id="hack-overlay" class="overlay hidden">
+                    <div class="hack-container">
+                        <div class="hack-header">
+                            <h3><i class="fas fa-laptop-code"></i> HACK TRACKER</h3>
+                            <div class="hack-timer" id="hack-timer">15s</div>
+                        </div>
+                        <div class="hack-display">
+                            <div class="hack-sequence" id="hack-sequence">
+                                <!-- Generated by JS -->
+                            </div>
+                            <div class="hack-input" id="hack-input">
+                                <!-- Generated by JS -->
+                            </div>
+                        </div>
+                        <p class="hack-instructions">Match the sequence above</p>
+                    </div>
+                </div>
+
+                <!-- Notification Container -->
+                <div id="notification-container" class="notification-container"></div>
+
+                <!-- Bottom Nav -->
+                <div class="bottom-nav">
+                    <div class="nav-indicator"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>
