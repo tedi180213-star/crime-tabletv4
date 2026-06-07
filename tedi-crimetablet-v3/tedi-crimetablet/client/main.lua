@@ -5,8 +5,11 @@ local isTabletOpen = false
 local hasTablet = false
 local activeBoost = nil
 local activeHeist = nil
+local activeHouseRobbery = nil
 local boostBlip = nil
 local dropOffBlip = nil
+local contractActive = false
+local currentGroup = {}
 
 -- ===== TABLET OPEN/CLOSE =====
 RegisterCommand('crimetablet', function()
@@ -75,7 +78,7 @@ end)
 
 -- ===== BOOSTING SYSTEM =====
 RegisterNUICallback('acceptBoostContract', function(data, cb)
-    if activeBoost then
+    if contractActive then
         cb({ success = false, message = 'You already have an active contract!' })
         return
     end
@@ -84,6 +87,7 @@ RegisterNUICallback('acceptBoostContract', function(data, cb)
     ESX.TriggerServerCallback('crimetablet:canStartBoost', function(canStart, message)
         if canStart then
             TriggerServerEvent('crimetablet:startBoostContract', data.class, data.vehicle, data.reward)
+            contractActive = true
             cb({ success = true })
         else
             cb({ success = false, message = message })
@@ -91,10 +95,26 @@ RegisterNUICallback('acceptBoostContract', function(data, cb)
     end)
 end)
 
+RegisterNUICallback('stopBoostContract', function(data, cb)
+    if contractActive then
+        contractActive = false
+        if activeBoost and activeBoost.vehicle then
+            DeleteEntity(activeBoost.vehicle)
+        end
+        activeBoost = nil
+        if boostBlip then RemoveBlip(boostBlip) end
+        if dropOffBlip then RemoveBlip(dropOffBlip) end
+        SendNUIMessage({ action = 'contractStopped' })
+        ShowNotification('~r~Contract cancelled.')
+        cb({ success = true })
+    else
+        cb({ success = false, message = 'No active contract' })
+    end
+end)
+
 RegisterNetEvent('crimetablet:boostContractStarted')
 AddEventHandler('crimetablet:boostContractStarted', function(contractData)
     activeBoost = contractData
-    CloseTablet()
     
     -- Spawn target vehicle
     local vehicleHash = GetHashKey(contractData.vehicleModel)
@@ -109,8 +129,17 @@ AddEventHandler('crimetablet:boostContractStarted', function(contractData)
     SetEntityAsMissionEntity(vehicle, true, true)
     SetVehicleDoorLockStatus(vehicle, 2) -- Locked
     
+    -- Add license plate visibility
+    local licensePlate = GenerateLicensePlate()
+    SetVehicleNumberPlateText(vehicle, licensePlate)
+    SendNUIMessage({
+        action = 'boostStarted',
+        licensePlate = licensePlate
+    })
+    
     activeBoost.vehicle = vehicle
     activeBoost.stage = 'steal'
+    activeBoost.licensePlate = licensePlate
     
     -- Set GPS to vehicle
     boostBlip = AddBlipForCoord(spawnCoords.x, spawnCoords.y, spawnCoords.z)
@@ -122,7 +151,7 @@ AddEventHandler('crimetablet:boostContractStarted', function(contractData)
     AddTextComponentString('Target Vehicle')
     EndTextCommandSetBlipName(boostBlip)
     
-    ShowNotification('~r~Target vehicle marked on GPS. Go steal it!')
+    ShowNotification('~r~Target vehicle marked on GPS. License: ~y~' .. licensePlate)
     
     -- Monitor boost progress
     Citizen.CreateThread(function()
@@ -131,7 +160,7 @@ AddEventHandler('crimetablet:boostContractStarted', function(contractData)
 end)
 
 function MonitorBoostContract()
-    while activeBoost do
+    while contractActive and activeBoost do
         Wait(500)
         
         if activeBoost.stage == 'steal' then
@@ -146,6 +175,9 @@ function MonitorBoostContract()
                     stage = 'hack',
                     progress = 40
                 })
+                
+                -- Monitor car damage for scratching points
+                MonitorCarDamage()
                 
                 ShowNotification('~y~Vehicle acquired! Hack the tracker to continue.')
                 
@@ -170,6 +202,39 @@ function MonitorBoostContract()
             end
         end
     end
+end
+
+function MonitorCarDamage()
+    if not activeBoost or not activeBoost.vehicle then return end
+    
+    local lastDamage = GetVehicleDeformationFixed(activeBoost.vehicle)
+    
+    Citizen.CreateThread(function()
+        while contractActive and activeBoost and activeBoost.stage ~= 'deliver' do
+            Wait(1000)
+            
+            if activeBoost and activeBoost.vehicle then
+                local currentDamage = GetVehicleDeformationFixed(activeBoost.vehicle)
+                if currentDamage > lastDamage then
+                    local damagePoints = math.floor((currentDamage - lastDamage) * Config.Boosting.CarScratchingPoints)
+                    TriggerServerEvent('crimetablet:addScratchingPoints', damagePoints)
+                    ShowNotification('~y~+' .. damagePoints .. ' Scratching Points')
+                    lastDamage = currentDamage
+                end
+            end
+        end
+    end)
+end
+
+function GenerateLicensePlate()
+    local plate = ""
+    for i = 1, 3 do
+        plate = plate .. string.char(math.random(65, 90))
+    end
+    for i = 1, 3 do
+        plate = plate .. tostring(math.random(0, 9))
+    end
+    return plate
 end
 
 function StartTrackerHack()
@@ -225,7 +290,7 @@ RegisterNUICallback('hackResult', function(data, cb)
         
         -- Give player another chance after cooldown
         Wait(10000)
-        if activeBoost and activeBoost.stage == 'hack' then
+        if contractActive and activeBoost and activeBoost.stage == 'hack' then
             ShowNotification('~y~Try hacking again...')
             StartTrackerHack()
         end
@@ -234,7 +299,9 @@ RegisterNUICallback('hackResult', function(data, cb)
 end)
 
 function CompleteBoostContract()
-    if not activeBoost then return end
+    if not contractActive or not activeBoost then return end
+    
+    contractActive = false
     
     -- Remove blips
     if dropOffBlip then RemoveBlip(dropOffBlip) end
@@ -258,6 +325,40 @@ function CompleteBoostContract()
     
     activeBoost = nil
 end
+
+-- ===== HOUSE ROBBERY SYSTEM =====
+RegisterNUICallback('startHouseRobbery', function(data, cb)
+    if activeHouseRobbery then
+        cb({ success = false, message = 'Already in a robbery!' })
+        return
+    end
+    
+    ESX.TriggerServerCallback('crimetablet:canStartHouseRobbery', function(canStart, message)
+        if canStart then
+            TriggerServerEvent('crimetablet:startHouseRobbery')
+            cb({ success = true })
+        else
+            cb({ success = false, message = message })
+        end
+    end)
+end)
+
+RegisterNetEvent('crimetablet:houseRobberyStarted')
+AddEventHandler('crimetablet:houseRobberyStarted', function(robberyData)
+    activeHouseRobbery = robberyData
+    ShowNotification('~y~House robbery started! Check nearby houses.')
+end)
+
+-- ===== LOCKPICKING SYSTEM =====
+RegisterNUICallback('lockpickCar', function(data, cb)
+    TriggerServerEvent('crimetablet:attemptCarLockpick', data.vehicleId)
+    cb({ success = true })
+end)
+
+RegisterNUICallback('lockpickHouse', function(data, cb)
+    TriggerServerEvent('crimetablet:attemptHouseLockpick', data.houseId)
+    cb({ success = true })
+end)
 
 -- ===== HEIST SYSTEM =====
 RegisterNUICallback('inviteCrew', function(data, cb)
@@ -417,4 +518,6 @@ AddEventHandler('onResourceStop', function(resourceName)
     if activeBoost and activeBoost.vehicle then
         DeleteEntity(activeBoost.vehicle)
     end
+    
+    contractActive = false
 end)

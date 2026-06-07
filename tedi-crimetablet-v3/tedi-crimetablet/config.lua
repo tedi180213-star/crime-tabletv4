@@ -5,11 +5,19 @@ Config.TabletItem = 'crime_tablet' -- ox_inventory item name
 Config.TabletCommand = 'crimetablet' -- Command to open tablet (backup)
 Config.TabletKey = 'F5' -- Key to open tablet (when item is in inventory)
 
+-- Tablet Account Settings
+Config.TabletAccounts = {
+    Enabled = true,
+    DefaultPassword = 'password123', -- Can be changed by user
+}
+
 -- Boosting Settings
 Config.Boosting = {
     Enabled = true,
     CooldownMinutes = 10, -- Cooldown between contracts
     PoliceRequired = 2, -- Minimum police online to start boost
+    GroupSize = 4, -- Max group size for boosting
+    CarScratchingPoints = 10, -- Points per successful car scratch
     HackDifficulty = { -- Hack minigame difficulty per class
         ['D'] = { length = 4, timer = 15 },
         ['C'] = { length = 5, timer = 12 },
@@ -60,6 +68,38 @@ Config.Boosting = {
         vector4(-583.12, -1634.78, 19.81, 95.67),
         vector4(1533.45, 6332.12, 24.11, 312.89),
     },
+}
+
+-- House Robbery Settings
+Config.HouseRobbery = {
+    Enabled = true,
+    CooldownMinutes = 120, -- Cooldown between house robberies
+    PoliceRequired = 1, -- Minimum police online
+    GroupSize = 4, -- Max group size
+    RequiredItems = {
+        'lockpick',
+        'thermal_device'
+    },
+    Payouts = {
+        cash = { min = 15000, max = 45000 },
+        gold = { min = 2, max = 8 },
+        diamonds = { min = 1, max = 4 }
+    },
+    Locations = {
+        vector3(265.45, 225.85, 101.68),
+        vector3(-450.23, 560.12, 112.45),
+        vector3(1150.67, -780.34, 67.89),
+        vector3(-320.56, 1020.34, 209.45),
+    }
+}
+
+-- Lockpicking Settings
+Config.Lockpicking = {
+    Enabled = true,
+    CarLockpickItem = 'lockpick',
+    HouseLockpickItem = 'thermal_device',
+    UnlockTime = 5, -- seconds
+    RequiredSkill = 0,
 }
 
 -- Heist Settings

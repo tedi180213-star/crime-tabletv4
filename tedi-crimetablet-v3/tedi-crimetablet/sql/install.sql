@@ -9,7 +9,20 @@ CREATE TABLE IF NOT EXISTS `crime_tablet_players` (
     `total_earnings` INT DEFAULT 0,
     `heist_level` INT DEFAULT 0,
     `crypto` INT DEFAULT 0,
+    `scratching_points` INT DEFAULT 0,
+    `house_robberies` INT DEFAULT 0,
     PRIMARY KEY (`identifier`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `crime_tablet_accounts` (
+    `id` INT AUTO_INCREMENT,
+    `identifier` VARCHAR(60) NOT NULL,
+    `account_name` VARCHAR(50) NOT NULL,
+    `email` VARCHAR(100) NOT NULL,
+    `password_hash` VARCHAR(255) NOT NULL,
+    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `unique_account` (`identifier`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS `crime_tablet_transactions` (
@@ -47,8 +60,3 @@ CREATE TABLE IF NOT EXISTS `crime_tablet_chat` (
     INDEX `idx_channel` (`channel`),
     INDEX `idx_timestamp` (`timestamp`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- ===== OX_INVENTORY ITEM =====
--- Add this to your ox_inventory items table or items.lua
--- INSERT INTO `ox_inventory_items` (`name`, `label`, `weight`, `stack`, `close`, `description`) 
--- VALUES ('crime_tablet', 'Crime Tablet', 500, false, true, 'An encrypted tablet for underground operations');

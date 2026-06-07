@@ -5,6 +5,8 @@ local ESX = exports['es_extended']:getSharedObject()
 -- Player cooldowns
 local boostCooldowns = {}
 local heistCooldowns = {}
+local houseRobberyCooldowns = {}
+local playerAccounts = {}
 
 -- ===== DATABASE INIT =====
 MySQL.ready(function()
@@ -17,7 +19,22 @@ MySQL.ready(function()
             `total_earnings` INT DEFAULT 0,
             `heist_level` INT DEFAULT 0,
             `crypto` INT DEFAULT 0,
+            `scratching_points` INT DEFAULT 0,
+            `house_robberies` INT DEFAULT 0,
             PRIMARY KEY (`identifier`)
+        )
+    ]])
+    
+    MySQL.query([[
+        CREATE TABLE IF NOT EXISTS `crime_tablet_accounts` (
+            `id` INT AUTO_INCREMENT,
+            `identifier` VARCHAR(60) NOT NULL,
+            `account_name` VARCHAR(50) NOT NULL,
+            `email` VARCHAR(100) NOT NULL,
+            `password_hash` VARCHAR(255) NOT NULL,
+            `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `unique_account` (`identifier`)
         )
     ]])
     
@@ -51,6 +68,8 @@ ESX.RegisterServerCallback('crimetablet:getPlayerData', function(source, cb)
             boostsCompleted = 0,
             totalEarnings = 0,
             heistLevel = 0,
+            scratchingPoints = 0,
+            houseRobberies = 0,
             transactions = {}
         }
         
@@ -61,6 +80,8 @@ ESX.RegisterServerCallback('crimetablet:getPlayerData', function(source, cb)
             data.totalEarnings = result[1].total_earnings
             data.heistLevel = result[1].heist_level
             data.crypto = result[1].crypto
+            data.scratchingPoints = result[1].scratching_points
+            data.houseRobberies = result[1].house_robberies
             data.level = math.floor((result[1].boost_level + result[1].heist_level) / 2)
         else
             -- Create player record
@@ -80,6 +101,45 @@ ESX.RegisterServerCallback('crimetablet:getPlayerData', function(source, cb)
             end
             cb(data)
         end)
+    end)
+end)
+
+-- ===== TABLET ACCOUNT SYSTEM =====
+RegisterNetEvent('crimetablet:createAccount')
+AddEventHandler('crimetablet:createAccount', function(accountName, email, password)
+    local source = source
+    local xPlayer = ESX.GetPlayerFromId(source)
+    if not xPlayer then return end
+    
+    local identifier = xPlayer.getIdentifier()
+    local hashedPassword = GenerateHash(password)
+    
+    MySQL.insert('INSERT INTO crime_tablet_accounts (identifier, account_name, email, password_hash) VALUES (?, ?, ?, ?)',
+        { identifier, accountName, email, hashedPassword },
+        function(id)
+            TriggerClientEvent('crimetablet:notification', source, 'Account created successfully!', 'success')
+            playerAccounts[identifier] = {
+                name = accountName,
+                email = email
+            }
+        end)
+end)
+
+RegisterNetEvent('crimetablet:getTabletAccount')
+AddEventHandler('crimetablet:getTabletAccount', function()
+    local source = source
+    local xPlayer = ESX.GetPlayerFromId(source)
+    if not xPlayer then return end
+    
+    local identifier = xPlayer.getIdentifier()
+    
+    MySQL.query('SELECT account_name, email FROM crime_tablet_accounts WHERE identifier = ?', { identifier }, function(result)
+        if result and result[1] then
+            TriggerClientEvent('crimetablet:accountData', source, {
+                name = result[1].account_name,
+                email = result[1].email
+            })
+        end
     end)
 end)
 
@@ -202,6 +262,71 @@ AddEventHandler('crimetablet:hackFailed', function(boostData)
     AlertPolice(source, 'Failed vehicle hack attempt detected')
 end)
 
+RegisterNetEvent('crimetablet:addScratchingPoints')
+AddEventHandler('crimetablet:addScratchingPoints', function(points)
+    local source = source
+    local xPlayer = ESX.GetPlayerFromId(source)
+    if not xPlayer then return end
+    
+    local identifier = xPlayer.getIdentifier()
+    MySQL.update('UPDATE crime_tablet_players SET scratching_points = scratching_points + ? WHERE identifier = ?', { points, identifier })
+end)
+
+-- ===== HOUSE ROBBERY SYSTEM =====
+ESX.RegisterServerCallback('crimetablet:canStartHouseRobbery', function(source, cb)
+    local xPlayer = ESX.GetPlayerFromId(source)
+    if not xPlayer then cb(false, 'Error') return end
+    
+    local identifier = xPlayer.getIdentifier()
+    
+    -- Check cooldown
+    if houseRobberyCooldowns[identifier] and houseRobberyCooldowns[identifier] > os.time() then
+        local remaining = houseRobberyCooldowns[identifier] - os.time()
+        cb(false, 'Cooldown: ' .. math.ceil(remaining / 60) .. ' min remaining')
+        return
+    end
+    
+    -- Check police count
+    local policeCount = GetPoliceCount()
+    if policeCount < Config.HouseRobbery.PoliceRequired then
+        cb(false, 'Not enough police online (' .. policeCount .. '/' .. Config.HouseRobbery.PoliceRequired .. ')')
+        return
+    end
+    
+    -- Check for required items
+    for _, item in ipairs(Config.HouseRobbery.RequiredItems) do
+        local hasItem = exports.ox_inventory:GetItem(source, item, nil, true)
+        if not hasItem or hasItem < 1 then
+            cb(false, 'Missing required item: ' .. item)
+            return
+        end
+    end
+    
+    cb(true, nil)
+end)
+
+RegisterNetEvent('crimetablet:startHouseRobbery')
+AddEventHandler('crimetablet:startHouseRobbery', function()
+    local source = source
+    local xPlayer = ESX.GetPlayerFromId(source)
+    if not xPlayer then return end
+    
+    local identifier = xPlayer.getIdentifier()
+    houseRobberyCooldowns[identifier] = os.time() + (Config.HouseRobbery.CooldownMinutes * 60)
+    
+    local locations = Config.HouseRobbery.Locations
+    local location = locations[math.random(#locations)]
+    
+    local robberyData = {
+        location = location,
+        cash = math.random(Config.HouseRobbery.Payouts.cash.min, Config.HouseRobbery.Payouts.cash.max),
+        gold = math.random(Config.HouseRobbery.Payouts.gold.min, Config.HouseRobbery.Payouts.gold.max),
+        diamonds = math.random(Config.HouseRobbery.Payouts.diamonds.min, Config.HouseRobbery.Payouts.diamonds.max)
+    }
+    
+    TriggerClientEvent('crimetablet:houseRobberyStarted', source, robberyData)
+end)
+
 -- ===== HEIST SYSTEM =====
 ESX.RegisterServerCallback('crimetablet:canStartHeist', function(source, cb)
     local xPlayer = ESX.GetPlayerFromId(source)
@@ -266,16 +391,18 @@ AddEventHandler('crimetablet:inviteCrew', function(heistId)
     local heistConfig = Config.Heist.Heists[heistId]
     if not heistConfig then return end
     
-    -- Find nearby players
+    -- Find nearby players (up to 4 people)
     local players = ESX.GetPlayers()
+    local crewCount = 1
     for _, playerId in ipairs(players) do
-        if playerId ~= source then
+        if playerId ~= source and crewCount < Config.Boosting.GroupSize then
             local targetPed = GetPlayerPed(playerId)
             local targetCoords = GetEntityCoords(targetPed)
             local dist = #(playerCoords - targetCoords)
             
             if dist < 10.0 then
                 TriggerClientEvent('crimetablet:crewInvite', playerId, playerName, heistConfig.label)
+                crewCount = crewCount + 1
             end
         end
     end
@@ -283,7 +410,6 @@ end)
 
 RegisterNetEvent('crimetablet:acceptCrewInvite')
 AddEventHandler('crimetablet:acceptCrewInvite', function(fromPlayer)
-    -- Handle crew join logic
     local source = source
     TriggerClientEvent('crimetablet:crewMemberJoined', fromPlayer, GetPlayerName(source))
 end)
@@ -292,40 +418,12 @@ end)
 local marketListings = {}
 local nextListingId = 1
 
-RegisterNUICallback('getMarketListings', function(source, cb)
-    cb({ listings = marketListings })
-end)
-
 RegisterNetEvent('crimetablet:getMarketListings')
 AddEventHandler('crimetablet:getMarketListings', function()
     local source = source
     TriggerClientEvent('crimetablet:receiveMarketListings', source, marketListings)
 end)
 
--- NUI callbacks for marketplace
-RegisterNUICallback('getMyListings', function(source, cb)
-    local xPlayer = ESX.GetPlayerFromId(source)
-    if not xPlayer then cb({ listings = {} }) return end
-    local identifier = xPlayer.getIdentifier()
-    local myItems = {}
-    for _, listing in ipairs(marketListings) do
-        if listing.owner == identifier then
-            table.insert(myItems, listing)
-        end
-    end
-    cb({ listings = myItems })
-end)
-
-RegisterNUICallback('listItem', function(source, cb)
-    local xPlayer = ESX.GetPlayerFromId(source)
-    if not xPlayer then cb({ success = false, message = 'Error' }) return end
-    
-    local data = source -- NUI callback data
-    -- This will be handled by server event instead
-    cb({ success = true })
-end)
-
--- Server events for marketplace
 RegisterNetEvent('crimetablet:listItem')
 AddEventHandler('crimetablet:listItem', function(itemName, price, qty, desc)
     local source = source
@@ -544,9 +642,8 @@ end
 
 function FormatTime(timestamp)
     if not timestamp then return 'Unknown' end
-    -- Simple relative time
     local now = os.time()
-    local diff = now - (os.time(timestamp) or now)
+    local diff = now - timestamp
     
     if diff < 60 then return 'Just now'
     elseif diff < 3600 then return math.floor(diff / 60) .. ' min ago'
@@ -555,10 +652,18 @@ function FormatTime(timestamp)
     end
 end
 
+function GenerateHash(str)
+    -- Simple hash function (use a proper hashing library in production)
+    local hash = 0
+    for i = 1, #str do
+        hash = bit.bxor(hash * 31, string.byte(str, i))
+    end
+    return tostring(math.abs(hash))
+end
+
 -- ===== ITEM USAGE =====
--- Use ESX's usable item system (works with all inventory versions)
 ESX.RegisterUsableItem(Config.TabletItem, function(source)
     TriggerClientEvent('crimetablet:useTablet', source)
 end)
 
-print('^2[Crime Tablet]^0 Resource started successfully!')
+print('^2[Crime Tablet]^0 Resource started successfully with all enhancements!')
