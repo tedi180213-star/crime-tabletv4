@@ -5,8 +5,6 @@ local ESX = exports['es_extended']:getSharedObject()
 -- Player cooldowns
 local boostCooldowns = {}
 local heistCooldowns = {}
-local houseRobberyCooldowns = {}
-local playerAccounts = {}
 
 -- ===== DATABASE INIT =====
 MySQL.ready(function()
@@ -20,21 +18,7 @@ MySQL.ready(function()
             `heist_level` INT DEFAULT 0,
             `crypto` INT DEFAULT 0,
             `scratching_points` INT DEFAULT 0,
-            `house_robberies` INT DEFAULT 0,
             PRIMARY KEY (`identifier`)
-        )
-    ]])
-    
-    MySQL.query([[
-        CREATE TABLE IF NOT EXISTS `crime_tablet_accounts` (
-            `id` INT AUTO_INCREMENT,
-            `identifier` VARCHAR(60) NOT NULL,
-            `account_name` VARCHAR(50) NOT NULL,
-            `email` VARCHAR(100) NOT NULL,
-            `password_hash` VARCHAR(255) NOT NULL,
-            `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            PRIMARY KEY (`id`),
-            UNIQUE KEY `unique_account` (`identifier`)
         )
     ]])
     
@@ -69,7 +53,6 @@ ESX.RegisterServerCallback('crimetablet:getPlayerData', function(source, cb)
             totalEarnings = 0,
             heistLevel = 0,
             scratchingPoints = 0,
-            houseRobberies = 0,
             transactions = {}
         }
         
@@ -81,7 +64,6 @@ ESX.RegisterServerCallback('crimetablet:getPlayerData', function(source, cb)
             data.heistLevel = result[1].heist_level
             data.crypto = result[1].crypto
             data.scratchingPoints = result[1].scratching_points
-            data.houseRobberies = result[1].house_robberies
             data.level = math.floor((result[1].boost_level + result[1].heist_level) / 2)
         else
             -- Create player record
@@ -104,45 +86,6 @@ ESX.RegisterServerCallback('crimetablet:getPlayerData', function(source, cb)
     end)
 end)
 
--- ===== TABLET ACCOUNT SYSTEM =====
-RegisterNetEvent('crimetablet:createAccount')
-AddEventHandler('crimetablet:createAccount', function(accountName, email, password)
-    local source = source
-    local xPlayer = ESX.GetPlayerFromId(source)
-    if not xPlayer then return end
-    
-    local identifier = xPlayer.getIdentifier()
-    local hashedPassword = GenerateHash(password)
-    
-    MySQL.insert('INSERT INTO crime_tablet_accounts (identifier, account_name, email, password_hash) VALUES (?, ?, ?, ?)',
-        { identifier, accountName, email, hashedPassword },
-        function(id)
-            TriggerClientEvent('crimetablet:notification', source, 'Account created successfully!', 'success')
-            playerAccounts[identifier] = {
-                name = accountName,
-                email = email
-            }
-        end)
-end)
-
-RegisterNetEvent('crimetablet:getTabletAccount')
-AddEventHandler('crimetablet:getTabletAccount', function()
-    local source = source
-    local xPlayer = ESX.GetPlayerFromId(source)
-    if not xPlayer then return end
-    
-    local identifier = xPlayer.getIdentifier()
-    
-    MySQL.query('SELECT account_name, email FROM crime_tablet_accounts WHERE identifier = ?', { identifier }, function(result)
-        if result and result[1] then
-            TriggerClientEvent('crimetablet:accountData', source, {
-                name = result[1].account_name,
-                email = result[1].email
-            })
-        end
-    end)
-end)
-
 -- ===== BOOSTING =====
 ESX.RegisterServerCallback('crimetablet:canStartBoost', function(source, cb)
     local xPlayer = ESX.GetPlayerFromId(source)
@@ -153,13 +96,6 @@ ESX.RegisterServerCallback('crimetablet:canStartBoost', function(source, cb)
     if boostCooldowns[identifier] and boostCooldowns[identifier] > os.time() then
         local remaining = boostCooldowns[identifier] - os.time()
         cb(false, 'Cooldown: ' .. math.ceil(remaining / 60) .. ' min remaining')
-        return
-    end
-    
-    -- Check police count
-    local policeCount = GetPoliceCount()
-    if policeCount < Config.Boosting.PoliceRequired then
-        cb(false, 'Not enough police online (' .. policeCount .. '/' .. Config.Boosting.PoliceRequired .. ')')
         return
     end
     
@@ -180,6 +116,13 @@ AddEventHandler('crimetablet:startBoostContract', function(class, vehicle, rewar
     -- Get vehicle model from config
     local classData = Config.Boosting.Classes[class]
     if not classData then return end
+    
+    -- Check police requirement for this specific class
+    local policeCount = GetPoliceCount()
+    if classData.requiredPolice and policeCount < classData.requiredPolice then
+        TriggerClientEvent('crimetablet:notification', source, 'Not enough police online (' .. policeCount .. '/' .. classData.requiredPolice .. ')', 'error')
+        return
+    end
     
     local vehicleModel = classData.vehicles[math.random(#classData.vehicles)]
     
@@ -272,62 +215,7 @@ AddEventHandler('crimetablet:addScratchingPoints', function(points)
     MySQL.update('UPDATE crime_tablet_players SET scratching_points = scratching_points + ? WHERE identifier = ?', { points, identifier })
 end)
 
--- ===== HOUSE ROBBERY SYSTEM =====
-ESX.RegisterServerCallback('crimetablet:canStartHouseRobbery', function(source, cb)
-    local xPlayer = ESX.GetPlayerFromId(source)
-    if not xPlayer then cb(false, 'Error') return end
-    
-    local identifier = xPlayer.getIdentifier()
-    
-    -- Check cooldown
-    if houseRobberyCooldowns[identifier] and houseRobberyCooldowns[identifier] > os.time() then
-        local remaining = houseRobberyCooldowns[identifier] - os.time()
-        cb(false, 'Cooldown: ' .. math.ceil(remaining / 60) .. ' min remaining')
-        return
-    end
-    
-    -- Check police count
-    local policeCount = GetPoliceCount()
-    if policeCount < Config.HouseRobbery.PoliceRequired then
-        cb(false, 'Not enough police online (' .. policeCount .. '/' .. Config.HouseRobbery.PoliceRequired .. ')')
-        return
-    end
-    
-    -- Check for required items
-    for _, item in ipairs(Config.HouseRobbery.RequiredItems) do
-        local hasItem = exports.ox_inventory:GetItem(source, item, nil, true)
-        if not hasItem or hasItem < 1 then
-            cb(false, 'Missing required item: ' .. item)
-            return
-        end
-    end
-    
-    cb(true, nil)
-end)
-
-RegisterNetEvent('crimetablet:startHouseRobbery')
-AddEventHandler('crimetablet:startHouseRobbery', function()
-    local source = source
-    local xPlayer = ESX.GetPlayerFromId(source)
-    if not xPlayer then return end
-    
-    local identifier = xPlayer.getIdentifier()
-    houseRobberyCooldowns[identifier] = os.time() + (Config.HouseRobbery.CooldownMinutes * 60)
-    
-    local locations = Config.HouseRobbery.Locations
-    local location = locations[math.random(#locations)]
-    
-    local robberyData = {
-        location = location,
-        cash = math.random(Config.HouseRobbery.Payouts.cash.min, Config.HouseRobbery.Payouts.cash.max),
-        gold = math.random(Config.HouseRobbery.Payouts.gold.min, Config.HouseRobbery.Payouts.gold.max),
-        diamonds = math.random(Config.HouseRobbery.Payouts.diamonds.min, Config.HouseRobbery.Payouts.diamonds.max)
-    }
-    
-    TriggerClientEvent('crimetablet:houseRobberyStarted', source, robberyData)
-end)
-
--- ===== HEIST SYSTEM =====
+-- ===== HEIST SYSTEM (Includes House Robbery) =====
 ESX.RegisterServerCallback('crimetablet:canStartHeist', function(source, cb)
     local xPlayer = ESX.GetPlayerFromId(source)
     if not xPlayer then cb(false, 'Error') return end
@@ -361,6 +249,17 @@ AddEventHandler('crimetablet:startHeist', function(heistId)
     local heistConfig = Config.Heist.Heists[heistId]
     if not heistConfig then return end
     
+    -- Check for required items if house robbery
+    if heistConfig.requiresItems then
+        for _, item in ipairs(heistConfig.requiresItems) do
+            local hasItem = exports.ox_inventory:GetItem(source, item, nil, true)
+            if not hasItem or hasItem < 1 then
+                TriggerClientEvent('crimetablet:notification', source, 'Missing required item: ' .. item, 'error')
+                return
+            end
+        end
+    end
+    
     -- Set cooldown
     heistCooldowns[identifier] = os.time() + (Config.Heist.CooldownMinutes * 60)
     
@@ -391,11 +290,11 @@ AddEventHandler('crimetablet:inviteCrew', function(heistId)
     local heistConfig = Config.Heist.Heists[heistId]
     if not heistConfig then return end
     
-    -- Find nearby players (up to 4 people)
+    -- Find nearby players (up to max crew size)
     local players = ESX.GetPlayers()
     local crewCount = 1
     for _, playerId in ipairs(players) do
-        if playerId ~= source and crewCount < Config.Boosting.GroupSize then
+        if playerId ~= source and crewCount < Config.Heist.MaxCrewSize then
             local targetPed = GetPlayerPed(playerId)
             local targetCoords = GetEntityCoords(targetPed)
             local dist = #(playerCoords - targetCoords)
@@ -652,18 +551,12 @@ function FormatTime(timestamp)
     end
 end
 
-function GenerateHash(str)
-    -- Simple hash function (use a proper hashing library in production)
-    local hash = 0
-    for i = 1, #str do
-        hash = bit.bxor(hash * 31, string.byte(str, i))
-    end
-    return tostring(math.abs(hash))
-end
-
 -- ===== ITEM USAGE =====
 ESX.RegisterUsableItem(Config.TabletItem, function(source)
     TriggerClientEvent('crimetablet:useTablet', source)
 end)
 
-print('^2[Crime Tablet]^0 Resource started successfully with all enhancements!')
+print('^2[Crime Tablet]^0 Resource started successfully!')
+print('^3[Crime Tablet]^0 D, C, B Classes now do NOT require police!')
+print('^3[Crime Tablet]^0 Only A and S Classes require police online!')
+print('^3[Crime Tablet]^0 House Robbery added to Heist app!')
